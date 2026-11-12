@@ -140,7 +140,7 @@ pub fn apply_in(img: &mut Rgb32f, s: &DevelopSettings, frame: Option<&Frame>) {
 
 /// The conversion of one source pixel (linear Rec.2020) to the positive the pipeline sees, for a
 /// few samples (a picker): the identity while the settings convert no negative.
-pub fn pixel_converter(s: &DevelopSettings) -> impl Fn([f32; 3]) -> [f32; 3] {
+pub fn pixel_converter(s: &DevelopSettings) -> impl Fn([f32; 3]) -> [f32; 3] + use<> {
     let on = enabled(s).then(|| {
         let c = converter(&s.negative);
         let mut tables = Box::new(Tables::blank());
