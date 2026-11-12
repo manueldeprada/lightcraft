@@ -102,6 +102,11 @@ pub fn specs() -> Vec<CommandSpec> {
                 let measured = if measuring { Some(measure(s, id, border, c)?) } else { None };
                 let mut out = Value::Null;
                 super::develop::edit(s, c, "Convert Negative", |d: &mut DevelopSettings| {
+                    // (switching it on shows it: the eye of the Convert Negative section would
+                    // otherwise keep the conversion off while the command reports it on)
+                    if on {
+                        d.set_section_enabled("negative", true);
+                    }
                     let n = &mut d.negative;
                     n.enabled = on;
                     if let Some(a) = advanced {
@@ -174,6 +179,7 @@ pub fn specs() -> Vec<CommandSpec> {
                 let measured = if d.negative.measured.is_none() { Some(measure_scan(&src, &d, DEFAULT_BORDER, c)?) } else { None };
                 let mut out = Value::Null;
                 super::develop::edit(s, c, if gray { "Gray Point" } else { "Film Base" }, |d: &mut DevelopSettings| {
+                    d.set_section_enabled("negative", true);
                     let n = &mut d.negative;
                     n.enabled = true;
                     n.advanced = true;

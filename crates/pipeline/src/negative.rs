@@ -86,7 +86,9 @@ pub fn params(n: &Negative) -> (Params, Analysis) {
     });
     let analysis = match measured {
         Some((a, balance)) => {
-            p.balance = balance;
+            // (a picked gray point states what is neutral: the scene-average balance, which acts
+            // on the mid-tones after the white balance, would tint it again)
+            p.balance = if n.advanced && n.gray.is_some() { [1.0; 3] } else { balance };
             a
         }
         None => Analysis::from_base(picked.unwrap_or_else(|| preset.base_linear()), p.film_gamma),
@@ -299,6 +301,28 @@ mod tests {
         s.negative.gray = None;
         apply(&mut none, &s);
         assert_eq!(simple.data, none.data, "Simple ignores the gray point");
+    }
+
+    /// With a measurement whose balance is not neutral, the picked gray still comes out gray.
+    #[test]
+    fn a_picked_gray_stays_gray_with_a_measured_balance() {
+        let (w, h) = (60, 40);
+        let at = w * h / 2 + w / 3;
+        let raw = scan(w, h);
+        let mut measured = measure(&raw, 0.12).unwrap();
+        measured.balance = [0.8, 1.0, 1.25];
+        let mut s = DevelopSettings::default();
+        s.negative =
+            Negative { enabled: true, advanced: true, measured: Some(measured), gray: Some(scan_colour(raw.data[at])), ..Negative::default() };
+        let spread = |c: [f32; 3]| c.iter().cloned().fold(f32::MIN, f32::max) - c.iter().cloned().fold(f32::MAX, f32::min);
+        let mut img = raw.clone();
+        apply(&mut img, &s);
+        assert!(spread(img.data[at]) < 0.02, "{:?}", img.data[at]);
+        // without the pick the balance is applied
+        s.negative.gray = None;
+        let mut balanced = raw.clone();
+        apply(&mut balanced, &s);
+        assert!(spread(balanced.data[at]) > 0.02, "{:?}", balanced.data[at]);
     }
 
     #[test]

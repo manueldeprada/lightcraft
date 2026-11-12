@@ -205,3 +205,18 @@ fn a_recipe_can_reset_a_negative_slider() {
     let p = s.presets.iter().find(|p| p.id == id).unwrap();
     assert_eq!(p.settings, json!({"negative": {"exposure": 0.0}}));
 }
+
+#[test]
+fn switching_on_turns_the_section_eye_back_on() {
+    let mut s = Session::with_demo();
+    let eye = |s: &Session| s.develop_of(s.active().unwrap()).unwrap().section_enabled("negative");
+    s.execute("develop.sectionEnabled", &json!({"section": "negative", "enabled": false})).unwrap();
+    assert!(!eye(&s));
+    s.execute("develop.negative", &json!({"on": false})).unwrap();
+    assert!(!eye(&s), "off leaves the section as it is");
+    s.execute("develop.negative", &json!({})).unwrap();
+    assert!(eye(&s) && negative(&s).enabled);
+    s.execute("develop.sectionEnabled", &json!({"section": "negative", "enabled": false})).unwrap();
+    s.execute("develop.negativePick", &json!({"x": 0.01, "y": 0.01})).unwrap();
+    assert!(eye(&s), "a pick switches the conversion on and shows it");
+}
