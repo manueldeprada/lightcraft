@@ -172,6 +172,20 @@ pub fn scan_colour(rec2020: [f32; 3]) -> [f64; 3] {
     to_srgb().apply(rec2020.map(f64::from)).map(|v| if v.is_finite() { v.clamp(0.0, 1.0) } else { 0.0 })
 }
 
+/// The picker's colour for a neighbourhood of source pixels (linear Rec.2020): each pixel is taken
+/// to linear sRGB and clamped to 0..1 as [`apply`] does before it converts, then the colours are
+/// averaged. Clamping the average instead would store a colour no rendered pixel has.
+pub fn scan_colour_mean(pixels: &[[f32; 3]]) -> [f64; 3] {
+    let mut acc = [0.0f64; 3];
+    for px in pixels {
+        let c = scan_colour(*px);
+        for i in 0..3 {
+            acc[i] += c[i];
+        }
+    }
+    acc.map(|v| v / pixels.len().max(1) as f64)
+}
+
 /// Measures `src` (linear Rec.2020, the whole scan) as a negative, leaving `border` (a fraction of
 /// each edge) out.
 ///
@@ -335,6 +349,19 @@ mod tests {
         let mut applied = raw.clone();
         apply(&mut applied, &s);
         assert_eq!(positive(&raw, &s).data, applied.data);
+    }
+
+    #[test]
+    fn the_picker_clamps_each_pixel_before_it_averages() {
+        // two sRGB samples either side of the clamp: 1.8 renders as 1.0 and -0.4 as 0.0
+        let back = to_rec2020().to_f32();
+        let px = |g: f32| back.map(|r| (r[0] + r[1] + r[2]) * g);
+        let mean = scan_colour_mean(&[px(1.8), px(-0.4)]);
+        for c in mean {
+            assert!((c - 0.5).abs() < 1e-5, "{mean:?}");
+        }
+        // clamping the average would give (1.8 - 0.4) / 2 = 0.7
+        assert!(scan_colour([0, 1, 2].map(|i| (px(1.8)[i] + px(-0.4)[i]) / 2.0)).iter().all(|c| (c - 0.7).abs() < 1e-5));
     }
 
     #[test]
