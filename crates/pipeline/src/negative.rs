@@ -12,6 +12,8 @@ use lightcraft_develop::{DevelopSettings, Negative, NegativeMeasurement};
 use lightcraft_film::{Analysis, Converter, Encoding, Look, Measurement, Params, Preset, Sliders, Tables, Tone, WbPreset};
 use lightcraft_raster::{Rgb32f, par_rows};
 
+use crate::geometry::Frame;
+
 pub use lightcraft_film as film;
 
 fn to_srgb() -> Mat3 {
@@ -104,8 +106,15 @@ pub fn converter(n: &Negative) -> Converter {
     Converter::new(&a, &p, Encoding::Linear, neutral)
 }
 
-/// Converts `img` (linear Rec.2020) in place when the settings convert a negative.
+/// Converts `img` (linear Rec.2020, a plain scan) in place when the settings convert a negative.
 pub fn apply(img: &mut Rgb32f, s: &DevelopSettings) {
+    apply_in(img, s, None);
+}
+
+/// [`apply`] for `img` as the output of `frame`: the blank canvas a lens or perspective warp leaves
+/// around the photo is not film, so it stays as the warp made it. Coverage comes from the warp's
+/// geometry, as in `local_tone::apply`, not from the pixel values.
+pub fn apply_in(img: &mut Rgb32f, s: &DevelopSettings, frame: Option<&Frame>) {
     if !enabled(s) {
         return;
     }
@@ -115,9 +124,13 @@ pub fn apply(img: &mut Rgb32f, s: &DevelopSettings) {
         c.tables(&mut tables);
         let (into, back) = (to_srgb().to_f32(), to_rec2020().to_f32());
         let mul = |m: &[[f32; 3]; 3], v: [f32; 3]| m.map(|r| r[0] * v[0] + r[1] * v[1] + r[2] * v[2]);
-        let w = img.width;
-        par_rows(&mut img.data, w, |_, row| {
-            for px in row {
+        let (w, h) = (img.width, img.height);
+        let cover = frame.and_then(|f| f.warp.as_ref().map(|wp| (wp, f.out_to_oriented(w, h))));
+        par_rows(&mut img.data, w, |y, row| {
+            for (x, px) in row.iter_mut().enumerate() {
+                if cover.as_ref().is_some_and(|(wp, o2t)| !wp.covers(o2t, x, y)) {
+                    continue;
+                }
                 let scan = mul(&into, *px).map(unit);
                 *px = mul(&back, c.convert_with(&tables, scan));
             }
