@@ -45,8 +45,8 @@ fn flag(p: &Value, key: &str, c: &str) -> Result<Option<bool>> {
 /// the measurement it sits next to come from the same pixels.
 const SCAN: SourceLevel = SourceLevel::Preview;
 
-/// Measures photo `id` inside its crop (the crop's box, straightening left aside), `border` in
-/// from each edge.
+/// Measures photo `id` inside its crop, straightened as the render shows it, `border` in from each
+/// edge.
 fn measure(s: &mut Session, id: crate::PhotoId, border: f64, c: &str) -> Result<lightcraft_develop::NegativeMeasurement> {
     let src = s.source_now(id, SCAN).map_err(|e| bad(c, e))?;
     let d = s.develop_of(id).unwrap_or_default();
@@ -55,6 +55,15 @@ fn measure(s: &mut Session, id: crate::PhotoId, border: f64, c: &str) -> Result<
 
 /// [`measure`] of a scan already read, with the photo's settings `d`.
 fn measure_scan(src: &lightcraft_raster::Rgb32f, d: &DevelopSettings, border: f64, c: &str) -> Result<lightcraft_develop::NegativeMeasurement> {
+    let angle = d.crop.geometry.angle;
+    if angle.is_finite() && angle != 0.0 {
+        // A turned crop is not a box of the scan: sample the straightened crop, as the render does.
+        let frame = lightcraft_pipeline::frame_for(src, &lightcraft_pipeline::SourceInfo::default(), d, true);
+        let r = frame.crop.rect_px(frame.ow, frame.oh);
+        let side = |v: f64| (v.round() as usize).clamp(1, 16384);
+        let straightened = frame.sample(src, side(r.x1 - r.x0), side(r.y1 - r.y0));
+        return lightcraft_pipeline::negative::measure(&straightened, border).map_err(|e| bad(c, e));
+    }
     let o = src.oriented(d.orientation);
     let r = d.crop.geometry.rect;
     let (w, h) = (o.width as f64, o.height as f64);
