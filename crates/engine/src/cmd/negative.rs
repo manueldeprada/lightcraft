@@ -168,9 +168,8 @@ pub fn specs() -> Vec<CommandSpec> {
                 }
                 let (cx, cy) = ((x.clamp(0.0, 1.0) * o.width as f64) as isize, (y.clamp(0.0, 1.0) * o.height as f64) as isize);
                 let r = (o.width.max(o.height) / 200).clamp(2, 32) as isize;
-                let n = ((2 * r + 1) * (2 * r + 1)) as f32;
                 let patch: Vec<[f32; 3]> =
-                    (-2..=2).flat_map(|dy| (-2..=2).map(move |dx| (dx, dy))).map(|(dx, dy)| o.get_clamped(cx + dx, cy + dy)).collect();
+                    (-r..=r).flat_map(|dy| (-r..=r).map(move |dx| (dx, dy))).map(|(dx, dy)| o.get_clamped(cx + dx, cy + dy)).collect();
                 let colour = lightcraft_pipeline::negative::scan_colour_mean(&patch);
                 let measured = if d.negative.measured.is_none() { Some(measure_scan(&src, &d, DEFAULT_BORDER, c)?) } else { None };
                 let mut out = Value::Null;
